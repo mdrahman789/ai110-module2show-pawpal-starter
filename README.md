@@ -50,3 +50,15 @@ pip install -r requirements.txt
 5. Add tests to verify key behaviors.
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
+
+## Testing PawPal+
+
+Run tests with:
+
+```bash
+python -m pytest
+```
+
+Right now this starter doesn’t include test files yet. Once you add them, good coverage should check sorting correctness (time order), recurring task logic (next occurrence), conflict detection (same-time tasks), and maybe filtering or task completion.
+
+Confidence (based on current test coverage): ★☆☆☆☆ (1/5)
