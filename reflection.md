@@ -32,8 +32,7 @@ These changes keep the design simple, but reduce confusion (especially when ther
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+One tradeoff I made is that conflict detection only checks for exact time matches (like two tasks both at "07:30"). It does not try to detect overlaps based on how long a task takes, because my tasks don’t track duration in a reliable way yet and I wanted the logic to stay simple. This is reasonable for this project because it still catches the most obvious problem (two things scheduled at the same exact time), but I know it could miss real-life conflicts (like a 20-minute walk at 7:30 and a 10-minute feeding at 7:40). If I improved it later, I’d add a duration field and then check for overlapping time ranges instead of just matching strings.
 
 ---
 

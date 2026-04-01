@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import time
+from datetime import date, time, timedelta
 from typing import Optional
 
 @dataclass
@@ -101,13 +101,61 @@ class Pet:
         task = self.get_task(task_id)
         if task is None:
             return False
+        was_completed = task.completed
         task.update_task(
             description=description,
             task_time=task_time,
             frequency=frequency,
             completed=completed,
         )
+        if (not was_completed) and task.completed:
+            self._create_next_recurring_task_if_needed(task)
         return True
+
+    def complete_task(self, task_id: int) -> bool:
+        """
+        Mark a task completed.
+
+        If it's a daily/weekly task, also create the next occurrence.
+        """
+        task = self.get_task(task_id)
+        if task is None:
+            return False
+
+        if task.completed:
+            return True
+
+        task.mark_complete()
+        self._create_next_recurring_task_if_needed(task)
+        return True
+
+    def _next_task_id(self) -> int:
+        """Return a new unique task id for this pet."""
+        if not self.tasks:
+            return 1
+        return max(t.task_id for t in self.tasks) + 1
+
+    def _create_next_recurring_task_if_needed(self, task: Task) -> None:
+        """If `task` is daily/weekly, add the next occurrence."""
+        freq = (task.frequency or "").strip().lower()
+        if freq not in {"daily", "weekly"}:
+            return
+
+        base_due = task.due_date or date.today()
+        if freq == "daily":
+            next_due = base_due + timedelta(days=1)
+        else:
+            next_due = base_due + timedelta(days=7)
+
+        next_task = Task(
+            task_id=self._next_task_id(),
+            description=task.description,
+            time=task.time,
+            frequency=task.frequency,
+            completed=False,
+            due_date=next_due,
+        )
+        self.add_task(next_task)
 
     def remove_task(self, task_id: int) -> bool:
         """Remove a task by id and return True if it was removed."""
@@ -128,6 +176,7 @@ class Task:
     time: str
     frequency: str = "daily"
     completed: bool = False
+    due_date: Optional[date] = None
 
     def mark_complete(self) -> None:
         """Mark this task as completed."""
@@ -161,9 +210,26 @@ class Scheduler:
         self._last_schedule: list[tuple[str, Pet, Task]] = []
         self._last_explanation: str = ""
 
+    def sort_by_time(self, tasks: list[Task]) -> list[Task]:
+        """Sort tasks by their time (using the 'HH:MM' string)."""
+        return sorted(tasks, key=lambda task: task.time)
+
+    def filter_by_completion(self, tasks: list[Task], completed: bool) -> list[Task]:
+        """Filter tasks by whether they are completed."""
+        return [task for task in tasks if task.completed == completed]
+
+    def filter_by_pet_name(self, pet_name: str) -> list[Task]:
+        """Return tasks for any pet whose name matches `pet_name`."""
+        target = pet_name.strip().lower()
+        matches: list[Task] = []
+        for pet in self.owner.get_pets():
+            if pet.name.strip().lower() == target:
+                matches.extend(pet.get_tasks())
+        return matches
+
     @staticmethod
     def _parse_time(value: str) -> time:
-        """Parse a 'HH:MM' time string into a sortable `datetime.time`."""
+        """Convert 'HH:MM' into a `time` so it sorts correctly."""
         try:
             parts = value.strip().split(":")
             if len(parts) != 2:
@@ -175,7 +241,7 @@ class Scheduler:
             return time(hour=23, minute=59)
 
     def get_all_tasks(self) -> list[tuple[Pet, Task]]:
-        """Return all (pet, task) pairs across the owner's pets."""
+        """Return all (pet, task) pairs for this owner."""
         pairs: list[tuple[Pet, Task]] = []
         for pet in self.owner.get_pets():
             for task in pet.get_tasks():
@@ -183,7 +249,7 @@ class Scheduler:
         return pairs
 
     def generate_daily_schedule(self, *, include_completed: bool = False) -> list[tuple[str, Pet, Task]]:
-        """Collect tasks across all pets and return them sorted by time."""
+        """Collect tasks (optionally excluding completed) and sort by time."""
         items: list[tuple[str, Pet, Task]] = []
         for pet, task in self.get_all_tasks():
             if (not include_completed) and task.completed:
@@ -203,4 +269,29 @@ class Scheduler:
         if not self._last_schedule:
             return "No schedule has been generated yet (or there were no tasks to schedule)."
         return self._last_explanation
+
+    def detect_time_conflicts(
+        self,
+        schedule: Optional[list[tuple[str, Pet, Task]]] = None,
+        *,
+        include_completed: bool = False,
+    ) -> list[str]:
+        """Return warnings for tasks that share the exact same 'HH:MM' time."""
+        if schedule is None:
+            schedule = self.generate_daily_schedule(include_completed=include_completed)
+
+        by_time: dict[str, list[tuple[Pet, Task]]] = {}
+        for task_time, pet, task in schedule:
+            key = (task_time or "").strip()
+            by_time.setdefault(key, []).append((pet, task))
+
+        warnings: list[str] = []
+        for task_time, items in sorted(by_time.items(), key=lambda x: self._parse_time(x[0])):
+            if len(items) <= 1:
+                continue
+
+            details = ", ".join(f"{pet.name}: {task.description}" for pet, task in items)
+            warnings.append(f"Conflict at {task_time}: {details}")
+
+        return warnings
 
