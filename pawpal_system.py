@@ -95,6 +95,8 @@ class Pet:
         description: Optional[str] = None,
         task_time: Optional[str] = None,
         frequency: Optional[str] = None,
+        duration_minutes: Optional[int] = None,
+        priority: Optional[int] = None,
         completed: Optional[bool] = None,
     ) -> bool:
         """Edit a task by id and return True if it exists."""
@@ -106,6 +108,8 @@ class Pet:
             description=description,
             task_time=task_time,
             frequency=frequency,
+            duration_minutes=duration_minutes,
+            priority=priority,
             completed=completed,
         )
         if (not was_completed) and task.completed:
@@ -152,6 +156,8 @@ class Pet:
             description=task.description,
             time=task.time,
             frequency=task.frequency,
+            duration_minutes=getattr(task, "duration_minutes", 15),
+            priority=getattr(task, "priority", 3),
             completed=False,
             due_date=next_due,
         )
@@ -175,6 +181,9 @@ class Task:
     # Kept as a string like "07:30" to stay beginner-friendly.
     time: str
     frequency: str = "daily"
+    duration_minutes: int = 15
+    # Priority: 1 = highest, 5 = lowest (simple scale for beginners).
+    priority: int = 3
     completed: bool = False
     due_date: Optional[date] = None
 
@@ -188,6 +197,8 @@ class Task:
         description: Optional[str] = None,
         task_time: Optional[str] = None,
         frequency: Optional[str] = None,
+        duration_minutes: Optional[int] = None,
+        priority: Optional[int] = None,
         completed: Optional[bool] = None,
     ) -> None:
         """Update one or more fields on this task."""
@@ -197,6 +208,11 @@ class Task:
             self.time = task_time
         if frequency is not None:
             self.frequency = frequency
+        if duration_minutes is not None:
+            self.duration_minutes = max(0, int(duration_minutes))
+        if priority is not None:
+            p = int(priority)
+            self.priority = min(5, max(1, p))
         if completed is not None:
             self.completed = bool(completed)
 
@@ -249,20 +265,61 @@ class Scheduler:
         return pairs
 
     def generate_daily_schedule(self, *, include_completed: bool = False) -> list[tuple[str, Pet, Task]]:
-        """Collect tasks (optionally excluding completed) and sort by time."""
-        items: list[tuple[str, Pet, Task]] = []
+        """
+        Build a daily schedule.
+
+        How it chooses tasks (simple + beginner-friendly):
+        - Optionally exclude completed tasks.
+        - Sort by priority first (1 highest), then by time.
+        - If the owner set `available_time_minutes` (> 0), only include tasks that fit.
+        """
+        candidates: list[tuple[Pet, Task]] = []
         for pet, task in self.get_all_tasks():
             if (not include_completed) and task.completed:
                 continue
-            items.append((task.time, pet, task))
+            candidates.append((pet, task))
 
-        items.sort(key=lambda x: self._parse_time(x[0]))
-        self._last_schedule = items
-        self._last_explanation = (
-            "Tasks were collected from all pets and sorted by time so the plan follows a simple, "
-            "easy-to-follow day order (earliest tasks first)."
+        candidates.sort(
+            key=lambda pt: (
+                getattr(pt[1], "priority", 3),
+                self._parse_time(pt[1].time),
+            )
         )
-        return list(items)
+
+        limit = int(getattr(self.owner, "available_time_minutes", 0) or 0)
+        minutes_used = 0
+
+        chosen: list[tuple[str, Pet, Task]] = []
+        skipped_for_time: int = 0
+        for pet, task in candidates:
+            duration = int(getattr(task, "duration_minutes", 15) or 0)
+            duration = max(0, duration)
+
+            if limit > 0 and (minutes_used + duration) > limit:
+                skipped_for_time += 1
+                continue
+
+            chosen.append((task.time, pet, task))
+            minutes_used += duration
+
+        # Final display order: time-based so it reads like a day plan.
+        chosen.sort(key=lambda x: self._parse_time(x[0]))
+
+        self._last_schedule = chosen
+
+        if limit > 0:
+            self._last_explanation = (
+                f"Tasks were picked by priority (1 highest) and then fit into your available time "
+                f"({limit} minutes). The final schedule is shown in time order for readability. "
+                f"Planned {minutes_used} minute(s); skipped {skipped_for_time} task(s) that did not fit."
+            )
+        else:
+            self._last_explanation = (
+                "Tasks were collected from all pets, then the schedule was shown in time order so it "
+                "follows a simple, easy-to-follow day (earliest tasks first)."
+            )
+
+        return list(chosen)
 
     def explain_schedule(self) -> str:
         """Explain why the most recent schedule was chosen."""

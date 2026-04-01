@@ -1,0 +1,59 @@
+classDiagram
+
+class Owner {
+  +int owner_id
+  +str name
+  +int available_time_minutes
+  +list~str~ preferences
+  +list~Pet~ pets
+  +update_preferences(preferences: list~str~) None
+  +set_available_time(available_time_minutes: int) None
+  +add_pet(pet: Pet) None
+  +get_pet(pet_id: int) Pet?
+  +get_pets() list~Pet~
+  +get_all_tasks() list~Task~
+}
+
+class Pet {
+  +int pet_id
+  +str name
+  +str species
+  +int age
+  +int owner_id
+  +list~Task~ tasks
+  +update_info(name: str?, species: str?, age: int?) None
+  +add_task(task: Task) None
+  +get_tasks() list~Task~
+  +get_task(task_id: int) Task?
+  +edit_task(task_id: int, description: str?, task_time: str?, frequency: str?, completed: bool?) bool
+  +complete_task(task_id: int) bool
+  +remove_task(task_id: int) bool
+}
+
+class Task {
+  +int task_id
+  +str description
+  +str time
+  +str frequency
+  +bool completed
+  +date? due_date
+  +mark_complete() None
+  +update_task(description: str?, task_time: str?, frequency: str?, completed: bool?) None
+}
+
+class Scheduler {
+  +Owner owner
+  +sort_by_time(tasks: list~Task~) list~Task~
+  +filter_by_completion(tasks: list~Task~, completed: bool) list~Task~
+  +filter_by_pet_name(pet_name: str) list~Task~
+  +get_all_tasks() list~tuple~Pet, Task~~
+  +generate_daily_schedule(include_completed: bool=False) list~tuple~str, Pet, Task~~
+  +explain_schedule() str
+  +detect_time_conflicts(schedule: list~tuple~str, Pet, Task~~?, include_completed: bool=False) list~str~
+}
+
+Owner "1" o-- "0..*" Pet : has
+Pet "1" o-- "0..*" Task : has
+Scheduler "1" --> "1" Owner : uses
+Scheduler ..> Pet : reads
+Scheduler ..> Task : orders/filters

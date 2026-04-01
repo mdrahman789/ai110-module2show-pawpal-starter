@@ -8,16 +8,17 @@ In my initial UML design, I picked four main classes because they match what the
 
 - **Owner**: This represents the human using the app. It holds the owner’s basic info plus their available time and preferences, since those things affect what the schedule can realistically fit.
 - **Pet**: This represents the pet being cared for. It stores the pet’s details (like species and age) and links back to the owner, because each pet belongs to someone.
-- **Task**: This represents individual pet care tasks (like feeding, walking, grooming, meds, etc.). It includes duration and priority so the scheduler can make decisions, plus notes and a completed flag to track progress.
-- **Scheduler**: This is the “planner” part of the system. It connects an owner, a pet, and a list of tasks, and its job is to add/edit tasks and generate a daily plan with a short explanation of why that plan makes sense.
+- **Task**: This represents individual pet care tasks (like feeding, walking, grooming, meds, etc.). It includes a time, frequency, duration (minutes), a priority number, and a completed flag to track progress.
+- **Scheduler**: This is the “planner” part of the system. It collects tasks across pets and generates a daily plan. When the owner has limited time, it chooses higher-priority tasks first and only includes tasks that fit.
 
 **b. Design changes**
 
-Yes — after reviewing `pawpal_system.py`, I made a few small changes to make the relationships clearer and the classes easier to use.
+Yes — after reviewing `pawpal_system.py`, I made a few changes to make the relationships clearer and to better match the assignment requirements.
 
-- I connected the classes more directly: `Owner` now keeps a list of their `Pet` objects, `Pet` can keep a list of its `Task` objects, and each `Task` includes a `pet_id` so it’s clear which pet the task belongs to.
-- I clarified time units by renaming `available_time` to `available_minutes`, so it’s obvious what the scheduler is counting.
-- I also replaced a few placeholder methods (`pass`) with simple working updates (like updating info/preferences and marking tasks complete), and I changed `Scheduler.edit_task` to update fields on an existing task instead of replacing the whole task object.
+- I connected the classes directly: `Owner` keeps a list of `Pet` objects, and each `Pet` keeps a list of `Task` objects.
+- I clarified time units by using `available_time_minutes` on `Owner`, so it’s obvious what the scheduler is counting.
+- I added `duration_minutes` and `priority` to `Task` so the scheduler can make “what fits” decisions (not just sorting).
+- I made recurring behavior explicit: when a daily/weekly task is completed using `Pet.complete_task(...)`, the next occurrence is automatically created.
 
 These changes keep the design simple, but reduce confusion (especially when there are multiple pets/tasks) and make scheduling behavior more consistent.
 
@@ -27,12 +28,17 @@ These changes keep the design simple, but reduce confusion (especially when ther
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+My scheduler considers:
+
+- **Time available (minutes)**: if the owner sets `available_time_minutes` to a non-zero number, the schedule only includes tasks that fit within that time.
+- **Priority**: tasks have a priority number (1 is highest). When time is limited, higher-priority tasks are chosen first.
+- **Time of day (HH:MM)**: after tasks are chosen, the schedule is displayed in time order so it reads like a realistic day plan.
+
+I decided these constraints mattered most because they are easy to explain and test, and they match the app goal: help a busy owner fit the most important care tasks into a limited amount of time.
 
 **b. Tradeoffs**
 
-One tradeoff I made is that conflict detection only checks for exact time matches (like two tasks both at "07:30"). It does not try to detect overlaps based on how long a task takes, because my tasks don’t track duration in a reliable way yet and I wanted the logic to stay simple. This is reasonable for this project because it still catches the most obvious problem (two things scheduled at the same exact time), but I know it could miss real-life conflicts (like a 20-minute walk at 7:30 and a 10-minute feeding at 7:40). If I improved it later, I’d add a duration field and then check for overlapping time ranges instead of just matching strings.
+One tradeoff I made is that conflict detection only checks for exact time matches (like two tasks both at "07:30"). It does not try to detect overlaps based on duration ranges. This is reasonable for this project because it still catches the most obvious problem (two things scheduled at the same exact time), but I know it could miss real-life conflicts (like a 20-minute walk at 7:30 and a 10-minute feeding at 7:40). If I improved it later, I’d use `duration_minutes` to check for overlapping time ranges instead of just matching strings.
 
 ---
 
@@ -40,13 +46,17 @@ One tradeoff I made is that conflict detection only checks for exact time matche
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+I used VS Code Copilot kind of like a helper while I was building the scheduler. The most useful thing was the inline suggestions when I was writing small methods or repeating patterns. Copilot Chat also helped when I got stuck, like when I needed to talk through why something wasn’t working or when I wanted to turn my scheduling rules into a basic starting point.
+
+The best prompts were the really specific ones. Like “here’s my task list and available minutes, what’s a simple way to choose what fits?” or “what are a few edge cases I should try?” If I was too vague, the answers got kind of generic.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+One time I didn’t take the suggestion was when it wanted me to add extra classes (like a whole `TimeSlot` / `CalendarEvent` thing) to make scheduling more “real.” For this project that felt like overkill, so I kept it simpler with `Scheduler` and `Task` and just made smaller fixes that actually helped.
+
+When I did use AI suggestions, I didn’t just copy/paste them. I checked if they matched my UML and what the assignment actually wants, and then I tried a few quick scenarios to see if it broke anything (like not enough time, different priorities, or two tasks at the same time). If it made the code messier, I changed it or skipped it.
+
+I also used separate chat sessions for different parts of the project (design/UML vs coding vs debugging). That honestly kept me way more organized, because I wasn’t mixing everything together in one long chat and getting lost.
 
 ---
 
@@ -54,13 +64,19 @@ One tradeoff I made is that conflict detection only checks for exact time matche
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+I tested the most important scheduling behaviors:
+
+- **Fit-to-time scheduling**: when available minutes are limited, the scheduler only includes tasks that fit.
+- **Recurring task creation**: completing a daily/weekly task creates the next occurrence.
+- **Conflict detection**: tasks with the exact same `HH:MM` time are reported as conflicts.
+
+These tests matter because they cover the “smart” parts of the app (decision-making and edge cases), not just the UI.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+I’m moderately confident because the core behaviors are tested, and I also tried a few manual scenarios in the Streamlit app.
+
+If I had more time, I would test edge cases like invalid time strings (ex: "7:3"), zero/negative durations, ties when two tasks have the same priority, and a more realistic conflict checker that detects overlaps (not just exact matching times).
 
 ---
 
@@ -68,12 +84,12 @@ One tradeoff I made is that conflict detection only checks for exact time matche
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+I’m most satisfied with the way the UI and backend connect cleanly: I can add pets and tasks in Streamlit, then generate a schedule and immediately see the results. The recurring-task behavior also feels like a real “assistant” feature.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+If I had another iteration, I would improve conflict detection to consider duration overlaps, add a nicer way to edit tasks in the UI (not just add/complete), and use preferences more directly (for example, “morning walk preferred” or “avoid late-night tasks”).
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+The main thing I learned is that even with Copilot, I still have to be the “lead architect.” Copilot can generate a lot of ideas fast, but it doesn’t really know what my project should look like. I had to make the calls on what to keep simple, what to leave out, and how the design stays consistent.

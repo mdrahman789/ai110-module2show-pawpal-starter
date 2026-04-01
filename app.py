@@ -8,12 +8,9 @@ st.title("🐾 PawPal+")
 
 st.markdown(
     """
-Welcome to the PawPal+ starter app.
+PawPal+ is a pet care planning assistant. Add pets, add care tasks, and generate a daily plan.
 
-This file is intentionally thin. It gives you a working Streamlit app so you can start quickly,
-but **it does not implement the project logic**. Your job is to design the system and build it.
-
-Use this app as your interactive demo once your backend classes/functions exist.
+This demo connects a Streamlit UI to a small scheduling backend (see `pawpal_system.py`).
 """
 )
 
@@ -40,8 +37,15 @@ At minimum, your system should:
 
 st.divider()
 
-st.subheader("Quick Demo Inputs (UI only)")
+st.subheader("Owner")
 owner_name = st.text_input("Owner name", value="Jordan")
+available_minutes = st.number_input(
+    "Time available today (minutes)",
+    min_value=0,
+    max_value=1440,
+    value=60,
+    help="If this is 0, PawPal+ will include all tasks. Otherwise it tries to fit tasks into this time.",
+)
 
 # ---------------------------
 # Persist "backend" objects
@@ -57,6 +61,7 @@ if "owner" not in st.session_state:
 
 # Keep the stored Owner in sync with the UI inputs (without recreating it).
 st.session_state.owner.name = owner_name
+st.session_state.owner.available_time_minutes = int(available_minutes)
 
 if "next_pet_id" not in st.session_state:
     st.session_state.next_pet_id = 1
@@ -67,8 +72,15 @@ if "selected_pet_id" not in st.session_state:
 if "scheduler" not in st.session_state:
     st.session_state.scheduler = Scheduler(st.session_state.owner)
 else:
-    # If you ever replace/update the owner object, make sure the scheduler points at it.
+    # Keep the scheduler pointing at the current owner.
     st.session_state.scheduler.owner = st.session_state.owner
+
+# If you update `pawpal_system.py`, Streamlit may keep an older Scheduler instance in session state.
+# If it doesn't have the expected methods, recreate it so the UI matches the latest backend.
+if not hasattr(st.session_state.scheduler, "generate_daily_schedule") or not hasattr(
+    st.session_state.scheduler, "sort_by_time"
+):
+    st.session_state.scheduler = Scheduler(st.session_state.owner)
 
 st.markdown("### Pets")
 st.caption("Add pets using the form below. Pets are stored on the Owner in session state.")
@@ -135,6 +147,13 @@ else:
         task_description = st.text_input("Task description", value="")
         task_time = st.text_input("Time (HH:MM)", value="07:30")
         task_frequency = st.selectbox("Frequency", ["daily", "weekly", "as-needed"], index=0)
+        task_duration = st.number_input("Duration (minutes)", min_value=0, max_value=600, value=15)
+        task_priority = st.selectbox(
+            "Priority (1 = highest)",
+            options=[1, 2, 3, 4, 5],
+            index=2,
+            help="Higher priority tasks are picked first when time is limited.",
+        )
         add_task_submitted = st.form_submit_button("Add task")
 
     if add_task_submitted:
@@ -155,6 +174,8 @@ else:
                         description=description_clean,
                         time=time_clean,
                         frequency=task_frequency,
+                        duration_minutes=int(task_duration),
+                        priority=int(task_priority),
                     )
                     pet.add_task(task)
                     st.session_state.next_task_id = int(st.session_state.next_task_id) + 1
@@ -163,31 +184,81 @@ else:
                 except Exception:
                     st.error("Sorry—something went wrong while adding that task. Please try again.")
 
-    def _time_sort_key(value: str) -> tuple[int, int, str]:
-        try:
-            hh, mm = value.strip().split(":")
-            return (int(hh), int(mm), "")
-        except Exception:
-            return (99, 99, value)
-
     st.markdown("#### Current pets & tasks")
+    filter_pet_name = st.text_input("Filter tasks by pet name (optional)", value="")
     pets_for_display = st.session_state.owner.get_pets()
     if not pets_for_display:
         st.info("No pets yet. Add one above.")
     else:
+        st.caption("Tasks are shown in time order (sorted using the Scheduler).")
+        filter_clean = filter_pet_name.strip()
+        if filter_clean:
+            filtered_tasks = st.session_state.scheduler.filter_by_pet_name(filter_clean)
+            filtered_tasks = st.session_state.scheduler.sort_by_time(filtered_tasks)
+            if not filtered_tasks:
+                st.info("No tasks found for that pet name. Tip: the match is exact (example: “Luna”).")
+            else:
+                st.success(f"Found {len(filtered_tasks)} task(s) for “{filter_clean}”.")
+                with st.expander("Filtered results", expanded=True):
+                    st.table(
+                        [
+                            {
+                                "Time": t.time,
+                                "Task": t.description,
+                                "Frequency": t.frequency,
+                                "Duration (min)": getattr(t, "duration_minutes", 0),
+                                "Priority": getattr(t, "priority", ""),
+                                "Status": "Done" if t.completed else "To do",
+                            }
+                            for t in filtered_tasks
+                        ]
+                    )
+            st.divider()
+
+        st.markdown("#### Mark a task complete (shows recurring tasks)")
+        all_tasks: list[tuple[int, int, str]] = []
+        for pet in pets_for_display:
+            for t in pet.get_tasks():
+                label = f"{pet.name} • id={t.task_id} • {t.time} • {t.description}"
+                all_tasks.append((pet.pet_id, t.task_id, label))
+
+        if all_tasks:
+            label_to_ids = {label: (pet_id, task_id) for (pet_id, task_id, label) in all_tasks}
+            selected_label = st.selectbox("Pick a task", options=list(label_to_ids.keys()))
+            if st.button("Mark selected task complete"):
+                pet_id, task_id = label_to_ids[selected_label]
+                pet = st.session_state.owner.get_pet(int(pet_id))
+                if pet is None:
+                    st.error("Pet not found. Try again.")
+                else:
+                    ok = pet.complete_task(int(task_id))
+                    if ok:
+                        st.success("Task marked complete. If it was daily/weekly, the next occurrence was created.")
+                        st.rerun()
+                    else:
+                        st.error("Task not found. Try again.")
+        else:
+            st.caption("No tasks yet to complete.")
+        st.divider()
+
         for p in pets_for_display:
             st.markdown(f"**{p.name}**  \n{p.species}, {p.age} year(s) (id={p.pet_id})")
-            tasks = sorted(p.get_tasks(), key=lambda t: _time_sort_key(t.time))
+            tasks = st.session_state.scheduler.sort_by_time(p.get_tasks())
             if not tasks:
                 st.caption("No tasks yet.")
             else:
+                done_count = sum(1 for t in tasks if t.completed)
+                todo_count = len(tasks) - done_count
+                st.info(f"{todo_count} to do • {done_count} done")
                 st.table(
                     [
                         {
-                            "time": t.time,
-                            "task": t.description,
-                            "frequency": t.frequency,
-                            "completed": t.completed,
+                            "Time": t.time,
+                            "Task": t.description,
+                            "Frequency": t.frequency,
+                            "Duration (min)": getattr(t, "duration_minutes", 0),
+                            "Priority": getattr(t, "priority", ""),
+                            "Status": "Done" if t.completed else "To do",
                         }
                         for t in tasks
                     ]
@@ -197,12 +268,14 @@ else:
 st.divider()
 
 st.subheader("Build Schedule")
-st.caption("Generate a simple daily schedule from all pets' tasks.")
+st.caption("Generate a daily schedule from all pets' tasks (fits into available minutes if set).")
 
 if "last_schedule" not in st.session_state:
     st.session_state.last_schedule = []
 if "last_schedule_explanation" not in st.session_state:
     st.session_state.last_schedule_explanation = ""
+if "last_schedule_conflicts" not in st.session_state:
+    st.session_state.last_schedule_conflicts = []
 
 include_completed = st.checkbox("Include completed tasks", value=False)
 
@@ -221,6 +294,19 @@ if st.button("Generate schedule"):
         else:
             st.session_state.last_schedule_explanation = ""
 
+        # Optional "smart scheduling" feedback: detect time conflicts.
+        if hasattr(st.session_state.scheduler, "detect_time_conflicts") and callable(
+            getattr(st.session_state.scheduler, "detect_time_conflicts")
+        ):
+            st.session_state.last_schedule_conflicts = (
+                st.session_state.scheduler.detect_time_conflicts(
+                    st.session_state.last_schedule,
+                    include_completed=include_completed,
+                )
+            )
+        else:
+            st.session_state.last_schedule_conflicts = []
+
         if st.session_state.last_schedule:
             st.success("Schedule generated.")
         else:
@@ -234,14 +320,42 @@ if not schedule:
     st.info("No schedule yet. Add tasks, then click Generate schedule.")
 else:
     st.markdown("#### Today's schedule")
+    conflicts = st.session_state.last_schedule_conflicts or []
+    if conflicts:
+        st.warning(
+            "Scheduling conflicts detected. This usually means two tasks are set for the same time. "
+            "Consider moving one task a few minutes earlier/later."
+        )
+        conflict_rows = []
+        for msg in conflicts:
+            # Expected format from Scheduler: "Conflict at HH:MM: details..."
+            text = (msg or "").strip()
+            if text.lower().startswith("conflict at ") and ":" in text:
+                task_time = text.split("Conflict at ", 1)[1].split(":", 1)[0].strip()
+                details_clean = text.split(":", 1)[1].strip()
+            else:
+                task_time = ""
+                details_clean = text
+
+            conflict_rows.append(
+                {"Time": task_time, "Conflicting tasks": details_clean}
+            )
+
+        with st.expander("View conflict details", expanded=True):
+            st.table(conflict_rows)
+    else:
+        st.success("No scheduling conflicts detected.")
+
     st.table(
         [
             {
-                "time": task_time,
-                "pet": pet.name,
-                "task": task.description,
-                "frequency": task.frequency,
-                "completed": task.completed,
+                "Time": task_time,
+                "Pet": pet.name,
+                "Task": task.description,
+                "Frequency": task.frequency,
+                "Duration (min)": getattr(task, "duration_minutes", 0),
+                "Priority": getattr(task, "priority", ""),
+                "Status": "Done" if task.completed else "To do",
             }
             for (task_time, pet, task) in schedule
         ]
@@ -250,7 +364,12 @@ else:
     st.markdown("#### Daily plan (easy to read)")
     for task_time, pet, task in schedule:
         status = "done" if task.completed else "to do"
-        st.markdown(f"- **{task_time}** — **{pet.name}**: {task.description} ({task.frequency}, {status})")
+        dur = getattr(task, "duration_minutes", 0)
+        pri = getattr(task, "priority", "")
+        st.markdown(
+            f"- **{task_time}** — **{pet.name}**: {task.description} "
+            f"({task.frequency}, {dur} min, priority {pri}, {status})"
+        )
 
     explanation = st.session_state.last_schedule_explanation
     if explanation:
