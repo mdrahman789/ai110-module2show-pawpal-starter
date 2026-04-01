@@ -4,13 +4,22 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+In my initial UML design, I picked four main classes because they match what the app is trying to do: store info about the person, store info about the pet, keep a list of care tasks, and then build a daily plan from those tasks.
+
+- **Owner**: This represents the human using the app. It holds the owner’s basic info plus their available time and preferences, since those things affect what the schedule can realistically fit.
+- **Pet**: This represents the pet being cared for. It stores the pet’s details (like species and age) and links back to the owner, because each pet belongs to someone.
+- **Task**: This represents individual pet care tasks (like feeding, walking, grooming, meds, etc.). It includes duration and priority so the scheduler can make decisions, plus notes and a completed flag to track progress.
+- **Scheduler**: This is the “planner” part of the system. It connects an owner, a pet, and a list of tasks, and its job is to add/edit tasks and generate a daily plan with a short explanation of why that plan makes sense.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Yes — after reviewing `pawpal_system.py`, I made a few small changes to make the relationships clearer and the classes easier to use.
+
+- I connected the classes more directly: `Owner` now keeps a list of their `Pet` objects, `Pet` can keep a list of its `Task` objects, and each `Task` includes a `pet_id` so it’s clear which pet the task belongs to.
+- I clarified time units by renaming `available_time` to `available_minutes`, so it’s obvious what the scheduler is counting.
+- I also replaced a few placeholder methods (`pass`) with simple working updates (like updating info/preferences and marking tasks complete), and I changed `Scheduler.edit_task` to update fields on an existing task instead of replacing the whole task object.
+
+These changes keep the design simple, but reduce confusion (especially when there are multiple pets/tasks) and make scheduling behavior more consistent.
 
 ---
 
