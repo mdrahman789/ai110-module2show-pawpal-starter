@@ -25,7 +25,7 @@ class Pet {
   +add_task(task: Task) None
   +get_tasks() list~Task~
   +get_task(task_id: int) Task?
-  +edit_task(task_id: int, description: str?, task_time: str?, frequency: str?, completed: bool?) bool
+  +edit_task(task_id: int, description: str?, task_time: str?, frequency: str?, duration_minutes: int?, priority: int?, completed: bool?) bool
   +complete_task(task_id: int) bool
   +remove_task(task_id: int) bool
 }
@@ -35,10 +35,12 @@ class Task {
   +str description
   +str time
   +str frequency
+  +int duration_minutes
+  +int priority
   +bool completed
   +date? due_date
   +mark_complete() None
-  +update_task(description: str?, task_time: str?, frequency: str?, completed: bool?) None
+  +update_task(description: str?, task_time: str?, frequency: str?, duration_minutes: int?, priority: int?, completed: bool?) None
 }
 
 class Scheduler {

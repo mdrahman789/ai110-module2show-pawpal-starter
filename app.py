@@ -1,3 +1,5 @@
+import re
+
 import streamlit as st
 
 from pawpal_system import Owner, Pet, Scheduler, Task
@@ -330,9 +332,10 @@ else:
         for msg in conflicts:
             # Expected format from Scheduler: "Conflict at HH:MM: details..."
             text = (msg or "").strip()
-            if text.lower().startswith("conflict at ") and ":" in text:
-                task_time = text.split("Conflict at ", 1)[1].split(":", 1)[0].strip()
-                details_clean = text.split(":", 1)[1].strip()
+            m = re.match(r"^Conflict at (\d{1,2}:\d{2}):\s*(.*)$", text, flags=re.I)
+            if m:
+                task_time = m.group(1)
+                details_clean = m.group(2).strip()
             else:
                 task_time = ""
                 details_clean = text

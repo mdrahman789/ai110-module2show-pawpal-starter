@@ -27,7 +27,9 @@ Your job is to design the system first (UML), then implement the logic in Python
 
 ## 📸 Demo
 
-Screenshot of the PawPal+ app running locally (replace this with your real screenshot before submitting).
+Screenshot of the PawPal+ app running locally (`demo.png` lives in this folder next to `README.md`, so it renders on GitHub and in editors):
+
+![PawPal+ demo screenshot](demo.png)
 
 ## What you will build
 
@@ -56,12 +58,15 @@ PawPal+ includes a few “smarter” scheduling features to make the daily plan 
 ### Setup
 
 ```bash
+cd ai110-module2show-pawpal-starter   # if you’re starting from the Pawpal repo root
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 ### Run the app
+
+From this same folder (`ai110-module2show-pawpal-starter`):
 
 ```bash
 streamlit run app.py
@@ -82,11 +87,10 @@ streamlit run app.py
 Run tests with:
 
 ```bash
-python -m pytest
+# From the repository root (parent of `ai110-module2show-pawpal-starter/`):
+python -m pytest tests/ ai110-module2show-pawpal-starter/test_pawpal_system.py
 ```
 
-Right now this starter doesn’t include test files yet. Once you add them, good coverage should check sorting correctness (time order), recurring task logic (next occurrence), conflict detection (same-time tasks), and maybe filtering or task completion.
-
-This project includes a small set of tests for the most important behaviors (fit-to-time scheduling, recurring tasks, conflict detection).
+Tests live under `tests/` (with `conftest.py` adding the starter folder to the import path). They cover sorting (time order), recurring tasks (next occurrence), conflict detection (same-time tasks), filtering by completion, and fit-to-time scheduling.
 
 Confidence (based on current test coverage): ★★★☆☆ (3/5)

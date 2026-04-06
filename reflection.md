@@ -11,6 +11,12 @@ In my initial UML design, I picked four main classes because they match what the
 - **Task**: This represents individual pet care tasks (like feeding, walking, grooming, meds, etc.). It includes a time, frequency, duration (minutes), a priority number, and a completed flag to track progress.
 - **Scheduler**: This is the “planner” part of the system. It collects tasks across pets and generates a daily plan. When the owner has limited time, it chooses higher-priority tasks first and only includes tasks that fit.
 
+**Three core user actions**
+
+1. **Add and track pets**: the owner registers one or more pets (name, species, age) so tasks can be tied to the right animal.
+2. **Add and complete care tasks**: the owner records what needs to happen (time, duration, priority, frequency) and marks tasks done; daily/weekly tasks roll forward to the next occurrence.
+3. **Generate a daily schedule**: the app builds a plan from all pets’ tasks—optionally fitting available minutes, sorting by time for display, filtering by pet or completion, and warning about same-time conflicts.
+
 **b. Design changes**
 
 Yes — after reviewing `pawpal_system.py`, I made a few changes to make the relationships clearer and to better match the assignment requirements.
